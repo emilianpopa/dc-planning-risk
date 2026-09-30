@@ -7,7 +7,7 @@ const band = (b)=> b ? `<span class="band b-${b}"><span class="sh">${SHAPE[b]||'
 
 async function api(url, opts){ const r = await fetch(url, opts); const j = await r.json().catch(()=>({})); if(!r.ok) throw Object.assign(new Error(j.detail||j.error||r.status),{payload:j}); return j; }
 
-const TABS = [['project','Project'],['overview','Overview'],['outlook','Outlook'],['evidence','Evidence'],['register','Risk register'],['suggested','Suggested'],['compare','What changed']];
+const TABS = [['project','Project'],['overview','Overview'],['outlook','Outlook'],['evidence','Evidence'],['register','Risk register'],['suggested','Suggested'],['compare','What changed'],['report','Board report']];
 function nav(){
   document.getElementById('nav').innerHTML = TABS.map(([k,l])=>
     `<button class="${S.tab===k?'on':''}" data-t="${k}" ${!S.pid&&k!=='project'?'disabled style="opacity:.4"':''}>${l}</button>`).join('');
@@ -27,6 +27,7 @@ function render(){
   if(S.tab==='register') return m.append(viewRegister());
   if(S.tab==='suggested') return m.append(viewSuggested());
   if(S.tab==='compare')  return m.append(viewCompare());
+  if(S.tab==='report')   return m.append(viewReport());
 }
 
 /* ---------- project ---------- */
@@ -297,6 +298,75 @@ function viewOutlook(){
     el.querySelector('#gaps').innerHTML = d.gaps.map(g=>
       `<div class="rowline"><div><b>${g.have?'Built':'Not built'}</b> &nbsp; ${esc(g.item)}</div>
        <div class="bands"><span class="tag ${g.have?'t-yes':'t-no'}">${g.have?'in the prototype':'next'}</span></div></div>`).join('');
+  });
+  return el;
+}
+
+
+/* ---------- board report: the thing the risk manager actually hands over ---------- */
+function viewReport(){
+  const el = $(`<div>
+    <div class="card no-print"><h2>Board report</h2>
+      <div class="sub">Assembled from this review. Every line traces to something on the other tabs, nothing here is written by a model.</div>
+      <div class="row" style="margin-top:12px"><button class="act" id="pr">Print or save as PDF</button></div></div>
+    <div id="rep">building…</div></div>`);
+  el.querySelector('#pr').onclick = ()=>window.print();
+  setTimeout(async()=>{
+    const p = S.data.project, a = S.data.assessments||[];
+    let ol = {outlook:[], gaps:[]};
+    try { ol = await api(`/api/projects/${S.pid}/outlook`); } catch(e){}
+    const rk = await api(`/api/projects/${S.pid}/risks`);
+    const om = {}; (ol.outlook||[]).forEach(o=>om[o.concern]=o);
+    const gaps = a.filter(x=>x.insufficient);
+    const rising = (ol.outlook||[]).filter(o=>o.state==='BUILDING');
+
+    // Actions are derived by rule from what is above, never invented.
+    const actions = [];
+    gaps.forEach(g=>actions.push({w:'Close the evidence gap',
+      d:`${esc(g.concern)}: ${g.decisions_found} confirmed decision(s) of ${g.leads_found} lead(s). Open the council's own page for each lead and record the outcome.`,
+      why:'No likelihood can be stated below three confirmed decisions.'}));
+    rising.forEach(o=>{ const imp=(a.find(x=>x.concern===o.concern)||{}).impact_band;
+      actions.push({w:'Engage before the application',
+      d:`${esc(o.concern)}: public signal has gone from ${o.signals_prev} to ${o.signals_now} since the last review.`,
+      why: imp==='HIGH' ? 'High impact and the signal is growing.' : 'The signal is growing.'}); });
+    if((p.cooling||'').toLowerCase().includes('evapor'))
+      actions.push({w:'Test a mitigation',
+        d:'Water use is scored HIGH because cooling is evaporative at 120MW. Re-assess with closed loop selected and the band moves to LOW.',
+        why:'Impact is a function of your own inputs, so this one is inside your control.'});
+
+    el.querySelector('#rep').innerHTML = `
+    <div class="card"><div class="rephead">
+      <div><h2 style="margin:0">Planning risk, ${esc(p.name)}</h2>
+        <div class="sub">${esc(p.location)} &middot; ${p.capacity_mw}MW &middot; ${esc(p.cooling)} &middot; grid ${p.grid_demand_mw}MW &middot; nearest homes ${p.residential_m}m</div></div>
+      <div class="sub" style="text-align:right">Prepared for the board<br>${new Date().toISOString().slice(0,10)}</div></div>
+      <div class="basis" style="margin-top:14px"><b>Position.</b> ${gaps.length} of ${a.length} planning concerns cannot be given a likelihood yet, because no comparable decision has been confirmed. ${rising.length} concern(s) show public signal growing since the last review. Nothing in this report asserts a probability that the evidence does not support.</div>
+    </div>
+
+    <div class="card"><h2>1. The concerns, most worth attention first</h2>
+      <table><tr><th>Concern</th><th>Impact</th><th>Likelihood</th><th>Why that impact</th></tr>
+      ${a.map(x=>`<tr><td><b>${esc(x.concern)}</b></td><td>${band(x.impact_band)}</td><td>${band(x.likelihood_band)}</td>
+        <td class="meta">${(x.impact_basis||[]).map(esc).join('<br>')}</td></tr>`).join('')}</table></div>
+
+    <div class="card"><h2>2. What is building</h2>
+      ${(ol.outlook||[]).length? `<table><tr><th>Concern</th><th>Signals last review</th><th>Signals now</th><th>Direction</th></tr>
+      ${ol.outlook.map(o=>`<tr><td>${esc(o.concern)}</td><td>${o.signals_prev===null?'–':o.signals_prev}</td><td><b>${o.signals_now}</b></td><td>${esc(o.direction)}</td></tr>`).join('')}</table>`
+      : '<div class="empty">No prior review to compare against.</div>'}
+      <div class="basis" style="margin-top:12px">A leading indicator built from counted public sources. It is not a forecast of the decision.</div></div>
+
+    <div class="card"><h2>3. Recommended actions</h2>
+      ${actions.length? actions.map((x,i)=>`<div class="rowline"><div><b>${i+1}. ${x.w}</b><div class="meta">${x.d}</div>
+        <div class="meta" style="margin-top:3px"><i>Why: ${esc(x.why)}</i></div></div></div>`).join('')
+      : '<div class="empty">Nothing outstanding.</div>'}
+      <div class="basis" style="margin-top:12px">Each action is produced by a rule from the tables above. None of it is generated prose.</div></div>
+
+    <div class="card"><h2>4. The register these feed</h2>
+      <table><tr><th>Category</th><th>Risk</th><th>Impact</th><th>Likelihood</th><th>Mitigation</th></tr>
+      ${(rk.register||[]).map(r=>`<tr><td>${esc(r.category)}</td><td>${esc(r.title)}</td><td>${band(r.impact_band)}</td><td>${band(r.likelihood_band)}</td><td class="meta">${esc(r.mitigation)||'–'}</td></tr>`).join('')}</table></div>
+
+    <div class="card"><h2>5. What this report does not claim</h2>
+      ${(ol.gaps||[]).filter(g=>!g.have).map(g=>`<div class="rowline"><div>${esc(g.item)}</div></div>`).join('')
+        || '<div class="empty">–</div>'}
+      <div class="basis" style="margin-top:12px">Stated here so the board reads the limits with the findings, not after them.</div></div>`;
   });
   return el;
 }

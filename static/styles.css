@@ -53,3 +53,10 @@ a{color:var(--blue)} .src{font-size:13px;padding:11px 0;border-bottom:1px solid 
 .o-none {background:#F1F1EF;color:#6E6E6E;border-color:#A6A6A2}
 .tag.t-yes{background:#E9F6EE;color:#1F7A45}
 .tag.t-no {background:#F1EDFD;color:#5B44C4}
+
+.rephead{display:flex;justify-content:space-between;align-items:flex-start;gap:20px}
+@media print{
+  header,nav,#nav,.no-print{display:none!important}
+  .card{break-inside:avoid;box-shadow:none;border:1px solid #e2e8f0;margin-bottom:14px}
+  body{background:#fff}
+}
