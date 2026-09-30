@@ -36,7 +36,22 @@ def project(pid: int):
     return out
 
 @app.post("/api/projects/{pid}/review")
-def run_review(pid: int):
+async def run_review(pid: int, req: Request):
+    """The only endpoint that spends money. When DEMO_SEARCH_KEY is set (as it is in the hosted
+    demo) a caller must supply it, so a public link cannot burn the API quota. Everything else,
+    including browsing the real saved review, stays open."""
+    required = os.environ.get("DEMO_SEARCH_KEY", "").strip()
+    if required:
+        try: supplied = (await req.json()).get("key", "")
+        except Exception: supplied = ""
+        if supplied != required:
+            return JSONResponse({"error": "search_locked", "detail":
+                "This hosted demo browses a real review that was retrieved live on 30 Sep 2026. "
+                "Running a fresh search spends API credit, so it needs the demo key. "
+                "Everything else on this page is the genuine retrieved evidence."}, 402)
+    return _run_review(pid)
+
+def _run_review(pid: int):
     p = store.get_project(pid)
     if not p: return JSONResponse({"error": "not found"}, 404)
     try:

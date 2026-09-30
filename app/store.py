@@ -22,6 +22,10 @@ CREATE TABLE IF NOT EXISTS risk(
 
 def conn():
     os.makedirs(os.path.dirname(DB), exist_ok=True)
+    if not os.path.exists(DB):
+        seed = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "seed", "demo.db")
+        if os.path.exists(seed):
+            import shutil; shutil.copy(seed, DB)   # hosted demo opens on the real 30 Sep review
     c = sqlite3.connect(DB); c.row_factory = sqlite3.Row
     c.executescript(SCHEMA); return c
 

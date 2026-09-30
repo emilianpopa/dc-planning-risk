@@ -79,11 +79,19 @@ async function runReview(){
   const msg=document.getElementById('runmsg'); const btn=document.getElementById('run');
   btn.disabled=true; msg.innerHTML='<span class="spin"></span> searching five concerns, this takes a minute…';
   try{
-    await api('/api/projects/'+S.pid+'/review',{method:'POST'});
+    await api('/api/projects/'+S.pid+'/review',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({key:(localStorage.getItem('demokey')||'')})});
     S.data = await api('/api/projects/'+S.pid); S.tab='overview'; render();
   }catch(e){
     msg.innerHTML=''; btn.disabled=false;
-    document.getElementById('hz').innerHTML=`<div class="warn"><b>Search failed, so nothing was saved.</b><br>${esc(e.message)}</div>`;
+    const locked = (e.payload||{}).error==='search_locked';
+    document.getElementById('hz').innerHTML = locked
+      ? `<div class="note"><b>Live search is locked on this hosted demo.</b><br>${esc(e.message)}
+         <div class="row" style="margin-top:8px"><input id="dk" placeholder="demo key" style="max-width:220px">
+         <button class="act sm" id="dks">unlock</button></div></div>`
+      : `<div class="warn"><b>Search failed, so nothing was saved.</b><br>${esc(e.message)}</div>`;
+    const dks=document.getElementById('dks');
+    if(dks) dks.onclick=()=>{ localStorage.setItem('demokey',document.getElementById('dk').value.trim()); runReview(); };
   }
 }
 
