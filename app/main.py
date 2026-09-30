@@ -93,6 +93,19 @@ async def confirm_outcome(eid: int, req: Request):
     store.save_assessment(rev, a)
     return {"ok": True, "assessment": a}
 
+@app.get("/api/projects/{pid}/outlook")
+def outlook(pid: int):
+    """Forward look per concern, plus the explicit list of what is not built."""
+    r = store.latest_review(pid)
+    if not r: return JSONResponse({"error": "run a review first"}, 400)
+    cur = store.evidence_for(r["id"])
+    prev = store.prior_review(pid, r["id"])
+    prv = store.evidence_for(prev["id"]) if prev else None
+    return {"outlook": [assess.outlook(c, cur, prv) for c in search.CONCERNS],
+            "has_prior": prev is not None,
+            "gaps": assess.outlook_gaps()}
+
+
 @app.get("/api/projects/{pid}/risks")
 def risks(pid: int):
     return {"register": store.list_risks(pid, accepted=True),

@@ -125,3 +125,61 @@ def diff(current, previous):
             "new": [cur[u] for u in cur if u not in prv],
             "gone": [prv[u] for u in prv if u not in cur],
             "unchanged": len([u for u in cur if u in prv])}
+
+
+# ---------------------------------------------------------------------------
+# Forward look. This is a LEADING INDICATOR, not a trained forecast.
+#
+# Hannah's framing on 30 Sep: "if we're waiting until a problem materialises to start to
+# address it, then we're too late." So the question is not what the likelihood is today,
+# it is whether the signal that precedes a refusal is building.
+#
+# What this measures is real: how many community and authority signals each concern is
+# returning now, and whether that is more or fewer than the previous review. What it does
+# NOT do is predict a decision, because that needs a corpus of historical outcomes we do
+# not have. outlook_gaps() states that in the response rather than leaving it implied.
+SIGNAL_TYPES = ("community_signal", "authority_publication")
+
+def _count(evidence, concern, types=SIGNAL_TYPES):
+    return sum(1 for e in evidence
+               if e.get("concern") == concern and e.get("source_type") in types)
+
+def outlook(concern, current, previous):
+    """Per concern: signals now, signals last time, direction, and a plain-word outlook."""
+    now_n = _count(current, concern)
+    has_prior = previous is not None
+    prev_n = _count(previous, concern) if has_prior else None
+    delta = (now_n - prev_n) if has_prior else None
+
+    if not has_prior:
+        direction, note = "no baseline", "First review, so there is nothing to compare against yet."
+    elif delta > 0:
+        direction, note = "rising", f"{delta} more signal(s) than the previous review."
+    elif delta < 0:
+        direction, note = "falling", f"{abs(delta)} fewer signal(s) than the previous review."
+    else:
+        direction, note = "flat", "Same number of signals as the previous review."
+
+    if now_n == 0:
+        state, basis = "NO_SIGNAL", "Nothing public is being said about this yet, in what we retrieved."
+    elif now_n >= 3 and direction == "rising":
+        state, basis = "BUILDING", "Three or more public signals and the count is going up."
+    elif now_n >= 3:
+        state, basis = "PRESENT", "Three or more public signals, but the count is not growing."
+    else:
+        state, basis = "THIN", "Fewer than three public signals, too little to read a direction from."
+
+    return {"concern": concern, "signals_now": now_n, "signals_prev": prev_n,
+            "delta": delta, "direction": direction, "state": state,
+            "basis": basis, "note": note}
+
+
+def outlook_gaps():
+    """What a real forecast would need, stated out loud so a demo never implies we have it."""
+    return [
+        {"have": True,  "item": "Public signals retrieved live, each link resolved to its publisher."},
+        {"have": True,  "item": "Movement in those signals between one review and the next."},
+        {"have": False, "item": "Outcomes of comparable schemes, so a signal count can be tied to a refusal rate."},
+        {"have": False, "item": "A trained model. Nothing here is trained on anything. These are counted signals and a rule."},
+        {"have": False, "item": "Climate and grid projections for the site, which is where Google Earth Engine would come in."},
+    ]

@@ -7,7 +7,7 @@ const band = (b)=> b ? `<span class="band b-${b}"><span class="sh">${SHAPE[b]||'
 
 async function api(url, opts){ const r = await fetch(url, opts); const j = await r.json().catch(()=>({})); if(!r.ok) throw Object.assign(new Error(j.detail||j.error||r.status),{payload:j}); return j; }
 
-const TABS = [['project','Project'],['overview','Overview'],['evidence','Evidence'],['register','Register'],['suggested','Suggested'],['compare','What changed']];
+const TABS = [['project','Project'],['overview','Overview'],['outlook','Outlook'],['evidence','Evidence'],['register','Risk register'],['suggested','Suggested'],['compare','What changed']];
 function nav(){
   document.getElementById('nav').innerHTML = TABS.map(([k,l])=>
     `<button class="${S.tab===k?'on':''}" data-t="${k}" ${!S.pid&&k!=='project'?'disabled style="opacity:.4"':''}>${l}</button>`).join('');
@@ -22,6 +22,7 @@ function render(){
   if(!S.data) { m.innerHTML='<div class="empty">Pick or save a project first.</div>'; return; }
   if(S.detail) return m.append(viewDetail());
   if(S.tab==='overview') return m.append(viewOverview());
+  if(S.tab==='outlook')  return m.append(viewOutlook());
   if(S.tab==='evidence') return m.append(viewEvidence());
   if(S.tab==='register') return m.append(viewRegister());
   if(S.tab==='suggested') return m.append(viewSuggested());
@@ -47,10 +48,12 @@ function viewProject(){
       </div>
       <label>Project context</label><textarea id="f_context">${esc(p.context||'Greenfield site, existing 132kV substation 2km away, local campaign group already active.')}</textarea>
       <div class="row" style="margin-top:14px">
-        <button class="act" id="save">${S.pid?'Update project':'Save project'}</button>
-        <button class="act ghost" id="run" ${S.pid?'':'disabled'}>Run search</button>
+        <button class="act ghost" id="save">${S.pid?'Update project':'Save project'}</button>
+        <button class="act" id="run" ${S.pid?'':'disabled'}>\u25B6 Run the search</button>
         <span id="runmsg" class="sub"></span>
       </div>
+      <div class="sub" style="margin-top:9px">Save the project, then run the search. It queries all five planning concerns live, resolves every link to its publisher, and writes a review you can open on the other tabs.</div>
+      <div id="runbox"></div>
     </div>
     <div class="card"><h2>Saved projects</h2><div id="plist" class="sub">…</div></div>
   </div>`);
@@ -85,7 +88,7 @@ async function runReview(){
   }catch(e){
     msg.innerHTML=''; btn.disabled=false;
     const locked = (e.payload||{}).error==='search_locked';
-    document.getElementById('hz').innerHTML = locked
+    document.getElementById('runbox').innerHTML = locked
       ? `<div class="note"><b>Live search is locked on this hosted demo.</b><br>${esc(e.message)}
          <div class="row" style="margin-top:8px"><input id="dk" placeholder="demo key" style="max-width:220px">
          <button class="act sm" id="dks">unlock</button></div></div>`
@@ -249,6 +252,45 @@ function viewSuggested(){
   };
   setTimeout(draw);
   el.querySelector('#gen').onclick=async()=>{ await api(`/api/projects/${S.pid}/suggest`,{method:'POST'}); draw(); };
+  return el;
+}
+
+/* ---------- outlook: the forward look ---------- */
+const OSTATE = {
+  BUILDING:{w:'Pressure building', sh:'\u25B2', c:'o-build'},
+  PRESENT: {w:'Signal present',    sh:'\u25C6', c:'o-pres'},
+  THIN:    {w:'Too thin to read',  sh:'\u25A0', c:'o-thin'},
+  NO_SIGNAL:{w:'Nothing yet',      sh:'\u25CB', c:'o-none'}
+};
+function viewOutlook(){
+  const el = $(`<div>
+    <div class="card"><h2>What is building, before it becomes a decision</h2>
+      <div class="sub">A refused application is the end of the story. This counts the public signal that runs ahead of it, and whether that signal is growing since the last review. It does not predict the decision.</div>
+      <div id="ol" style="margin-top:14px">loading\u2026</div></div>
+    <div class="card"><h2>What this is, and what it is not</h2>
+      <div class="sub">Stated here so nothing in the demo implies more than it does.</div>
+      <div id="gaps" style="margin-top:12px"></div></div>
+  </div>`);
+  setTimeout(async()=>{
+    let d; try { d = await api(`/api/projects/${S.pid}/outlook`); }
+    catch(e){ el.querySelector('#ol').innerHTML = '<div class="empty">Run a review first.</div>'; return; }
+    el.querySelector('#ol').innerHTML = `<table>
+      <tr><th>Concern</th><th>Signals now</th><th>Last review</th><th>Direction</th><th>Outlook</th></tr>
+      ${d.outlook.map(o=>{
+        const m = OSTATE[o.state] || OSTATE.THIN;
+        const arrow = o.direction==='rising' ? '\u2197' : o.direction==='falling' ? '\u2198' : o.direction==='flat' ? '\u2192' : '\u2013';
+        return `<tr>
+          <td><b>${esc(o.concern)}</b><div class="meta">${esc(o.basis)}</div></td>
+          <td style="font-variant-numeric:tabular-nums"><b>${o.signals_now}</b></td>
+          <td style="font-variant-numeric:tabular-nums">${o.signals_prev===null?'<span class="sub">no baseline</span>':o.signals_prev}</td>
+          <td>${arrow} ${esc(o.direction)}<div class="meta">${esc(o.note)}</div></td>
+          <td><span class="band ${m.c}"><span class="sh">${m.sh}</span>${m.w}</span></td></tr>`;
+      }).join('')}</table>
+      <div class="basis" style="margin-top:14px">A signal is a petition, a campaign page, a consultation response or a council publication that our search returned and whose link resolved to a real publisher. Counting them is not the same as forecasting a decision.</div>`;
+    el.querySelector('#gaps').innerHTML = d.gaps.map(g=>
+      `<div class="rowline"><div><b>${g.have?'Built':'Not built'}</b> &nbsp; ${esc(g.item)}</div>
+       <div class="bands"><span class="tag ${g.have?'t-yes':'t-no'}">${g.have?'in the prototype':'next'}</span></div></div>`).join('');
+  });
   return el;
 }
 

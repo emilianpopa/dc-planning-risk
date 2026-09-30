@@ -45,3 +45,11 @@ a{color:var(--blue)} .src{font-size:13px;padding:11px 0;border-bottom:1px solid 
 @keyframes s{to{transform:rotate(360deg)}}
 .right{margin-left:auto} .row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
 .empty{color:var(--muted);padding:26px;text-align:center}
+
+/* outlook bands. No red/green pair carries meaning: word + shape + colour together. */
+.o-build{background:#FDF2E3;color:#9A6410;border-color:#E0921F}
+.o-pres {background:#EBF0FF;color:#2F4BD6;border-color:#3B5BF6}
+.o-thin {background:#F1EDFD;color:#5B44C4;border-color:#7A5CF0}
+.o-none {background:#F1F1EF;color:#6E6E6E;border-color:#A6A6A2}
+.tag.t-yes{background:#E9F6EE;color:#1F7A45}
+.tag.t-no {background:#F1EDFD;color:#5B44C4}
