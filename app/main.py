@@ -74,6 +74,28 @@ def _run_review(pid: int):
     except search.SearchUnavailable as e:
         return JSONResponse({"error": "search_unavailable", "detail": str(e)}, 503)
 
+@app.post("/api/projects/{pid}/reassess")
+def reassess(pid: int):
+    """Recompute IMPACT from the project inputs against evidence already retrieved.
+
+    Impact is a pure function of the inputs, so changing the cooling choice or the grid
+    demand changes the answer without going back out to search. That matters twice: it
+    spends nothing, and it lets a risk manager test a mitigation ("what if we go closed
+    loop") and see which rule changes, live."""
+    p = store.get_project(pid)
+    if not p: return JSONResponse({"error": "not found"}, 404)
+    r = store.latest_review(pid)
+    if not r: return JSONResponse({"error": "run a review first"}, 400)
+    c = store.conn()
+    for concern in search.CONCERNS:
+        ev = store.evidence_for(r["id"], concern)
+        c.execute("DELETE FROM assessment WHERE review_id=? AND concern=?", (r["id"], concern))
+        c.commit()
+        store.save_assessment(r["id"], assess.assess(p, concern, ev))
+    c.close()
+    return {"ok": True, "assessments": assess.attention_order(store.assessments_for(r["id"]))}
+
+
 @app.post("/api/evidence/{eid}/outcome")
 async def confirm_outcome(eid: int, req: Request):
     """Confirming an outcome is a human act. It then re-runs the assessment for that concern."""

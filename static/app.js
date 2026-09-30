@@ -50,9 +50,10 @@ function viewProject(){
       <div class="row" style="margin-top:14px">
         <button class="act ghost" id="save">${S.pid?'Update project':'Save project'}</button>
         <button class="act" id="run" ${S.pid?'':'disabled'}>\u25B6 Run the search</button>
+        <button class="act ghost" id="reassess" ${S.pid?'':'disabled'}>Re-assess with these inputs</button>
         <span id="runmsg" class="sub"></span>
       </div>
-      <div class="sub" style="margin-top:9px">Save the project, then run the search. It queries all five planning concerns live, resolves every link to its publisher, and writes a review you can open on the other tabs.</div>
+      <div class="sub" style="margin-top:9px">Save the project, then run the search. It queries all five planning concerns live, resolves every link to its publisher, and writes a review you can open on the other tabs. Re-assess re-scores impact against evidence already retrieved, so you can test a change like switching the cooling without spending anything.</div>
       <div id="runbox"></div>
     </div>
     <div class="card"><h2>Saved projects</h2><div id="plist" class="sub">…</div></div>
@@ -74,6 +75,12 @@ function viewProject(){
     S.pid=r.id; S.data=await api('/api/projects/'+S.pid); render();
   };
   h.querySelector('#run').onclick = runReview;
+  h.querySelector('#reassess').onclick = async()=>{
+    const msg=document.getElementById('runmsg');
+    msg.textContent='re-scoring impact against the evidence already retrieved\u2026';
+    await api('/api/projects/'+S.pid+'/reassess',{method:'POST'});
+    S.data = await api('/api/projects/'+S.pid); S.tab='overview'; render();
+  };
   return h;
 }
 const v = (id)=>document.getElementById(id).value;
